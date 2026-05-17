@@ -25,7 +25,7 @@ pip install .
 
 Or:
 ```bash
-pip install swarm
+pip install swarmai
 ```
 
 ## 💻 CLI Usage
