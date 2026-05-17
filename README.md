@@ -1,3 +1,7 @@
+[![PyPI version](https://img.shields.io/pypi/v/swarmai.svg)](https://pypi.org/project/swarmai/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/ProgVM/swarm.svg)](https://github.com/ProgVM/swarm/stargazers)
+
 # 🐝 Swarm
 
 **Swarm** is an advanced, open-source multi-agent intelligence framework designed for autonomous collaboration. Powered by Google's **Gemini 3.1 Flash Lite**, Swarm allows multiple agents to interact, use tools, execute code, and perform web searches in a shared environment.
