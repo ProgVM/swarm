@@ -145,35 +145,49 @@ def run():
             smart_sleep(max(3.5, min(delay, 35)), enabled=session.enable_pauses)
 
         except KeyboardInterrupt:
-            print(f"\n{Colors.MENU}{Colors.BOLD}=== COMMAND CENTER ==={Colors.RESET}")
-            print("1. Rotate Keys\n2. Toggle Pauses\n3. Save State\n4. Inject Message\n5. Log Level\n6. Shutdown")
-            choice = input(f"{Colors.MENU}Command: {Colors.RESET}").strip()
-            
-            if choice == '1': 
-                session.rotate_key()
-            elif choice == '2': 
-                session.enable_pauses = not session.enable_pauses
-            elif choice == '3':
-                p = input(f"File path [{args.save_file}]: ") or args.save_file
-                create_backup(p)
+            try:
+                print(f"\n{Colors.MENU}{Colors.BOLD}=== COMMAND CENTER ==={Colors.RESET}")
+                print("1. Rotate Keys\n2. Toggle Pauses\n3. Save State\n4. Inject Message\n5. Log Level\n6. Shutdown")
+                choice = input(f"{Colors.MENU}Command: {Colors.RESET}").strip()
                 
-                # Filter out sensitive credentials before saving config
-                saved_config = vars(args).copy()
-                if "keys" in saved_config:
-                    del saved_config["keys"]
+                if choice == '1': 
+                    session.rotate_key()
+                elif choice == '2': 
+                    session.enable_pauses = not session.enable_pauses
+                elif choice == '3':
+                    p = input(f"File path [{args.save_file}]: ") or args.save_file
+                    create_backup(p)
+                    
+                    # Filter out sensitive credentials before saving config
+                    saved_config = vars(args).copy()
+                    if "keys" in saved_config:
+                        del saved_config["keys"]
 
-                save_data = {
-                    "current_agent": session.current_agent_idx,
-                    "last_interaction": session.last_interaction,
-                    "histories": [Serializer.serialize_history(a.history) for a in session.agents],
-                    "version": "1.0",
-                    "config": saved_config
-                }
-                with open(p, 'w', encoding='utf-8') as f:
-                    json.dump(save_data, f, indent=2, ensure_ascii=False)
-                print(f"State saved to {p}")
-            elif choice == '6': 
-                sys.exit(0)
+                    save_data = {
+                        "current_agent": session.current_agent_idx,
+                        "last_interaction": session.last_interaction,
+                        "histories": [Serializer.serialize_history(a.history) for a in session.agents],
+                        "version": "1.0",
+                        "config": saved_config
+                    }
+                    with open(p, 'w', encoding='utf-8') as f:
+                        json.dump(save_data, f, indent=2, ensure_ascii=False)
+                    print(f"State saved to {p}")
+                elif choice == '4':
+                    msg = input("Enter message to inject: ").strip()
+                    if msg:
+                        session.last_interaction = msg
+                        print(f"Injected message: {msg}")
+                elif choice == '5':
+                    level = input("Enter log level (DEBUG, INFO, WARNING, ERROR): ").strip().upper()
+                    if level in ["DEBUG", "INFO", "WARNING", "ERROR"]:
+                        logging.getLogger().setLevel(getattr(logging, level))
+                        print(f"Log level changed to {level}")
+                elif choice == '6': 
+                    sys.exit(0)
+            except KeyboardInterrupt:
+                print(f"\n{Colors.SYS}Menu cancelled.{Colors.RESET}")
+
 
 if __name__ == "__main__":
     run()

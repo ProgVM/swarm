@@ -103,8 +103,8 @@ class SwarmSession:
         
         while True:
             try:
-                active_tools = [{"function_declarations": [ToolRegistry.get_all_definitions()[t]]} 
-                                for t in agent.tools_enabled if t in ToolRegistry.get_all_definitions()]
+                decls = [ToolRegistry.get_all_definitions()[t] for t in agent.tools_enabled if t in ToolRegistry.get_all_definitions()]
+                active_tools = [{"function_declarations": decls}] if decls else None
                 
                 config = types.GenerateContentConfig(system_instruction=self._build_root_prompt(agent), tools=active_tools if active_tools else None)
                 resp = self.client.models.generate_content(model=agent.model, config=config, contents=agent.history)
@@ -139,10 +139,16 @@ class SwarmSession:
                         res = ToolRegistry.execute(call.name, call.args, agent, self.client)
                     
                     EventLogger.log_event(session_file, "TOOL_RESULT", agent.name, data={"tool": call.name, "success": res.success})
-                    tool_results.append(types.Part.from_function_response(name=call.name, response={"result": str(res)}))
+                    tool_results.append(types.Part.from_function_response(name=call.name, response={"result": str(res)}, id=getattr(call, "id", None)))
                     reports.append(f"Shared Report: {agent.name} used {call.name}. Output: {str(res)[:150]}...")
 
                 agent.history.append(types.Content(role="tool", parts=tool_results))
+                
+                if self.turn_passed_manually:
+                    if not full_output_text.strip():
+                        full_output_text = f"Turn passed to {self.agents[self.current_agent_idx].name}."
+                    self.last_interaction = full_output_text
+                    return full_output_text.strip(), reports
 
             except Exception as e:
                 err_str = str(e)
