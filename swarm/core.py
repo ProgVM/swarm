@@ -18,7 +18,7 @@ class Agent:
         self.id = agent_id
         self.name = name
         self.description = description
-        self.model = config.get('model', 'gemini-3.1-flash-lite')
+        self.model = config.get('model', 'gemini-3.5-flash')
         self.sys_prompt = config.get('sys_prompt', 'You are a helpful agent.')
         self.temperature = float(config.get('temp', 0.7))
         self.history = []

@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub stars](https://img.shields.io/github/stars/ProgVM/swarm.svg)](https://github.com/ProgVM/swarm/stargazers)
 
-**Swarm** is a professional, production-ready, highly flexible multi-agent intelligence framework powered by Google's **Gemini 3.1** models. It allows an arbitrary number of autonomous agents to collaborate, use system tools, execute code, perform web searches, and index local data in a shared environmental context with robust transaction safety and memory management.
+**Swarm** is a professional, production-ready, highly flexible multi-agent intelligence framework powered by Google's **Gemini** models. It allows an arbitrary number of autonomous agents to collaborate, use system tools, execute code, perform web searches, and index local data in a shared environmental context with robust transaction safety and memory management.
 
 ## 🚀 Key Features
 
