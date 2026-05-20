@@ -61,7 +61,10 @@ def run():
         "file_blacklist": [],
         "sys1": "You are Agent 1.",
         "sys2": "You are Agent 2.",
-        "temp": 0.7
+        "temp": 0.7,
+        "keys": None,
+        "config": None,
+        "load": None
     }
 
     # Load file config if passed via --config
@@ -91,6 +94,8 @@ def run():
         def __init__(self, d):
             for k, v in d.items():
                 setattr(self, k, v)
+        def __getattr__(self, item):
+            return None
                 
     args = ConfigNamespace(merged_config)
 
