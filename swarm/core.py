@@ -94,6 +94,7 @@ class SwarmSession:
         # Initialize reports and reset manual turn flag
         reports = []
         self.turn_passed_manually = False
+        full_output_text = ""
         
         agent.history, _ = self.memory.manage_history(agent.history)
         agent.history.append(types.Content(role="user", parts=[types.Part(text=self.last_interaction)]))
@@ -109,12 +110,19 @@ class SwarmSession:
                 resp = self.client.models.generate_content(model=agent.model, config=config, contents=agent.history)
                 
                 candidate = resp.candidates[0]
+                current_chunk = "".join([p.text for p in candidate.content.parts if p.text])
+                if current_chunk:
+                    if full_output_text:
+                        full_output_text += "\n" + current_chunk
+                    else:
+                        full_output_text = current_chunk
+
                 calls = [p.function_call for p in candidate.content.parts if p.function_call]
                 
                 if not calls:
                     agent.history.append(candidate.content)
-                    self.last_interaction = "".join([p.text for p in candidate.content.parts if p.text])
-                    return self.last_interaction, reports
+                    self.last_interaction = full_output_text
+                    return full_output_text.strip(), reports
 
                 agent.history.append(candidate.content)
                 tool_results = []
