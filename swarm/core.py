@@ -139,7 +139,11 @@ class SwarmSession:
                         res = ToolRegistry.execute(call.name, call.args, agent, self.client)
                     
                     EventLogger.log_event(session_file, "TOOL_RESULT", agent.name, data={"tool": call.name, "success": res.success})
-                    tool_results.append(types.Part.from_function_response(name=call.name, response={"result": str(res)}, id=getattr(call, "id", None)))
+                    call_id = getattr(call, "id", None)
+                    if call_id:
+                        tool_results.append(types.Part(function_response=types.FunctionResponse(name=call.name, response={"result": str(res)}, id=call_id)))
+                    else:
+                        tool_results.append(types.Part.from_function_response(name=call.name, response={"result": str(res)}))
                     reports.append(f"Shared Report: {agent.name} used {call.name}. Output: {str(res)[:150]}...")
 
                 agent.history.append(types.Content(role="tool", parts=tool_results))
