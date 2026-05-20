@@ -4,18 +4,23 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub stars](https://img.shields.io/github/stars/ProgVM/swarm.svg)](https://github.com/ProgVM/swarm/stargazers)
 
-**Swarm** is a professional, highly flexible multi-agent intelligence framework powered by Google's **Gemini 3.1 Flash Lite**. It allows an arbitrary number of autonomous agents to collaborate, use system tools, execute code, and perform web searches in a shared environmental context.
+**Swarm** is a professional, production-ready, highly flexible multi-agent intelligence framework powered by Google's **Gemini 3.1** models. It allows an arbitrary number of autonomous agents to collaborate, use system tools, execute code, perform web searches, and index local data in a shared environmental context with robust transaction safety and memory management.
 
 ## 🚀 Key Features
 
 - **N-Agent Support**: Run as many agents as your tasks require.
-- **Autonomous Toolchain**: Agents use `web_search` and `shell_exec` to solve complex problems.
-- **Dynamic Configuration**: Configure any agent parameter (name, model, temperature, system prompt) directly via CLI flags.
+- **Autonomous Toolchain**: Modular, isolated tools returning unified `ToolResult` wrappers.
+- **Dynamic Layered Configuration**: Configures any parameter (name, model, temperature, system prompt) via CLI flags, JSON configuration files, or saved session states with hierarchical merging (`Defaults ➔ Session Config ➔ CLI Args`).
 - **Handover Logic**: Agents can autonomously pass control to specific peers using the `pass_turn` tool.
 - **Shared Environment**: Tool execution outputs are shared with all agents via automatic **System Reports**.
 - **Files API Integration**: Agents can upload and analyze local files (PDFs, images, logs) on the fly.
 - **Smart Sandboxing**: Per-agent regex blacklists for terminal commands and file system paths.
-- **Persistent Sessions**: Save and load complete Swarm states, including histories and turn orders.
+- **Persistent & Secure Sessions**: Save and load complete Swarm states. Protected against race conditions and file corruption via `SessionLockManager` (thread-safe RLock and atomic temp-file swaps).
+- **Advanced Memory Hierarchy**: Integrated `MemoryManager` with sliding window history truncation to prevent context window overflow while preserving key interaction states.
+- **Built-in RAG (Retrieval-Augmented Generation)**: Dynamic indexing and querying of local documents via `LocalFileRetriever` and `RAGTool` with token-aware truncation.
+- **Network Resilience**: 
+  - **429 (Too Many Requests)**: Automatic API key rotation.
+  - **503 (Service Unavailable) / 500**: Automatic backoff and retry.
 
 ## 🛠 Installation
 
@@ -59,15 +64,17 @@ Swarm uses a dynamic argument system. You can prefix any standard parameter with
 Press `Ctrl+C` during execution to pause the Swarm and access the interactive menu:
 1. **Change Keys**: Rotate or update API keys on the fly.
 2. **Toggle Pauses**: Switch between manual and autonomous modes.
-3. **Save State**: Export the entire session to a JSON file.
+3. **Save State**: Export the entire session to a JSON file (including the active config layer!).
 4. **Inject Directive**: Manually "whisper" a command to one or all agents.
 5. **Log Level**: Adjust verbosity without restarting.
+6. **Shutdown**: Gracefully exit the session.
 
 ## 📄 Tool Documentation
 
-- **web_search**: Browses the web for real-time data.
+- **web_search**: Browses the web for real-time data using DuckDuckGo.
 - **shell_exec**: Runs bash commands. Supports complex multi-line scripts.
-- **upload_file**: Uploads local assets to the AI context.
+- **upload_file**: Uploads local assets to the Google Gemini Files API.
+- **rag_query**: Queries indexed local documents for relevant context snippets.
 - **pass_turn**: Moves the turn to a specific agent by name.
 
 ## 🤝 Contributing

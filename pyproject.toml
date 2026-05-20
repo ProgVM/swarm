@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swarmai"
-version = "1.0.4"
+version = "1.1.0"
 authors = [
   { name="ProgVM", email="progvminc@gmail.com" },
 ]
-description = "A highly flexible multi-agent ReAct framework powered by Google Gemini"
+description = "A highly flexible multi-agent ReAct framework powered by Google Gemini with advanced Memory, RAG, and Network resilience"
 readme = "README.md"
 requires-python = ">=3.9"
 classifiers = [
@@ -17,8 +17,8 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "google-genai",
-    "duckduckgo-search",
+    "google-genai>=0.2.0",
+    "duckduckgo-search>=6.0.0",
 ]
 
 [project.urls]
