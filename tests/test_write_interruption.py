@@ -5,9 +5,11 @@ import subprocess
 
 def test_interruption():
     filepath = "test_session.json"
-    with open(filepath, 'w') as f: json.dump({"old": "data"}, f)
-    
-    script = """
+    try:
+        with open(filepath, 'w') as f:
+            json.dump({"old": "data"}, f)
+        
+        script = """
 import os, json, shutil
 filepath = 'test_session.json'
 shutil.copy(filepath, filepath + '.bak')
@@ -15,13 +17,31 @@ tmp = filepath + '.tmp'
 with open(tmp, 'w') as f:
     json.dump({'new': 'data'}, f)
 os._exit(1)
-    """
-    with open("crash_script.py", "w") as f: f.write(script)
-    subprocess.run(["python3", "crash_script.py"])
-    
-    # Проверка
-    print(f"Original content: {open(filepath).read()}")
-    print(f"Backup exists: {os.path.exists(filepath + '.bak')}")
-    print(f"Backup content: {open(filepath + '.bak').read()}")
-
-test_interruption()
+"""
+        with open("crash_script.py", "w") as f:
+            f.write(script.strip())
+        
+        # Запускаем скрипт, ожидаем падение (exit code 1), поэтому check=False
+        subprocess.run(["python3", "crash_script.py"], check=False)
+        
+        # Проверка
+        assert os.path.exists(filepath)
+        assert os.path.exists(filepath + ".bak")
+        assert os.path.exists(filepath + ".tmp")
+        
+        with open(filepath) as f:
+            assert json.load(f) == {"old": "data"}
+            
+        with open(filepath + ".bak") as f:
+            assert json.load(f) == {"old": "data"}
+            
+        with open(filepath + ".tmp") as f:
+            assert json.load(f) == {"new": "data"}
+            
+    finally:
+        for f in [filepath, filepath + ".bak", filepath + ".tmp", "crash_script.py"]:
+            if os.path.exists(f):
+                try:
+                    os.remove(f)
+                except Exception:
+                    pass

@@ -18,11 +18,11 @@ def test_index_out_of_bounds():
     # Имитируем ситуацию, когда сохраненный индекс больше количества агентов
     session.current_agent_idx = 99 
     
-    try:
-        agent = session.agents[session.current_agent_idx]
-        print(f"Ошибка не воспроизведена: {agent.name}")
-    except IndexError:
-        print("Баг подтвержден: IndexError при доступе к агенту с неверным индексом.")
-
-if __name__ == "__main__":
-    test_index_out_of_bounds()
+    # Вызываем валидацию индексов сессии, которая должна вернуть индекс к 0
+    session.validate_indices()
+    
+    assert session.current_agent_idx == 0
+    # Проверяем, что теперь доступ к текущему агенту безопасен
+    agent = session.agents[session.current_agent_idx]
+    assert agent is not None
+    assert agent.name == "Agent_1"
