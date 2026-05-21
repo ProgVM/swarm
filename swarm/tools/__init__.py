@@ -6,7 +6,7 @@ from .upload import upload_file
 from .rag.rag_tool import RAGTool
 from .rag.local_retriever import LocalFileRetriever
 
-# Регистрация стандартных инструментов
+# Register standard tools
 ToolRegistry.register("shell_exec", shell_exec, {
     "name": "shell_exec",
     "description": "Run bash commands.",
@@ -34,7 +34,7 @@ ToolRegistry.register("pass_turn", pass_turn, {
     "parameters": {"type": "OBJECT", "properties": {"agent_name": {"type": "STRING"}}, "required": ["agent_name"]}
 })
 
-# Регистрация RAG инструмента
+# Register RAG tool
 retriever = LocalFileRetriever()
 rag_tool = RAGTool(retriever)
 ToolRegistry.register("rag_query", rag_tool.run, rag_tool.get_schema())

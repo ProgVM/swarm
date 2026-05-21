@@ -21,10 +21,10 @@ os._exit(1)
         with open("crash_script.py", "w") as f:
             f.write(script.strip())
         
-        # Запускаем скрипт, ожидаем падение (exit code 1), поэтому check=False
+        # Run script, expect crash (exit code 1), so check=False
         subprocess.run(["python3", "crash_script.py"], check=False)
         
-        # Проверка
+        # Check
         assert os.path.exists(filepath)
         assert os.path.exists(filepath + ".bak")
         assert os.path.exists(filepath + ".tmp")

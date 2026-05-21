@@ -13,7 +13,7 @@ class EventLogger:
             "data": data or {}
         }
         
-        # Используем atomic_update для обеспечения потокобезопасности
+        # Use atomic_update to ensure thread safety
         with SessionLockManager.atomic_update(file_path) as session_data:
             if "events" not in session_data:
                 session_data["events"] = []
