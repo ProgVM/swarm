@@ -10,6 +10,7 @@ from .config import ConfigManager
 from .ui import handle_session_error
 from .core import SwarmSession
 from .exceptions import SwarmDataError
+from .locking import SessionLockManager
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Swarm Intelligence Framework")
@@ -24,6 +25,7 @@ def parse_args():
     parser.add_argument("--save_file", default="swarm_session.json")
     parser.add_argument("--max_results", type=int, default=5)
     parser.add_argument("--cmd_timeout", type=int, default=300)
+    parser.add_argument("--max_history", type=int, default=10)
     parser.add_argument("--cmd_blacklist", nargs="*", default=[])
     parser.add_argument("--file_blacklist", nargs="*", default=[])
     parser.add_argument("--sys1", default="You are Agent 1.")
@@ -57,6 +59,7 @@ def run():
         "save_file": "swarm_session.json",
         "max_results": 5,
         "cmd_timeout": 300,
+        "max_history": 10,
         "cmd_blacklist": [],
         "file_blacklist": [],
         "sys1": "You are Agent 1.",
@@ -170,8 +173,8 @@ def run():
                         "version": "1.0",
                         "config": saved_config
                     }
-                    with open(p, 'w', encoding='utf-8') as f:
-                        json.dump(save_data, f, indent=2, ensure_ascii=False)
+                    with SessionLockManager.atomic_update(p) as session_data:
+                        session_data.update(save_data)
                     print(f"State saved to {p}")
                 elif choice == '4':
                     msg = input("Enter message to inject: ").strip()

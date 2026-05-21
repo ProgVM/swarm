@@ -4,4 +4,5 @@ CONFIG_SCHEMA = {
     "max_results": int,
     "agents_count": int,
     "model": str,
+    "max_history": int,
 }

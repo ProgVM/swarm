@@ -39,7 +39,7 @@ class SwarmSession:
         self.last_interaction = getattr(args, 'first_msg', "Hello.")
         self.enable_pauses = not getattr(args, 'no_pause', False)
         self.turn_passed_manually = False
-        self.memory = MemoryManager(max_history=10)
+        self.memory = MemoryManager(max_history=getattr(args, 'max_history', 10))
         self._init_agents(args)
 
     def _init_agents(self, args):
