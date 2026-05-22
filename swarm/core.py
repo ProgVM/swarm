@@ -126,6 +126,7 @@ class SwarmSession:
 
                 agent.history.append(candidate.content)
                 tool_results = []
+                extra_parts = []
                 
                 for call in calls:
                     EventLogger.log_event(session_file, "TOOL_INVOKED", agent.name, data={"tool": call.name})
@@ -144,9 +145,18 @@ class SwarmSession:
                         tool_results.append(types.Part(function_response=types.FunctionResponse(name=call.name, response={"result": str(res)}, id=call_id)))
                     else:
                         tool_results.append(types.Part.from_function_response(name=call.name, response={"result": str(res)}))
+                        
+                    if getattr(res, "extra_parts", None):
+                        extra_parts.extend(res.extra_parts)
+                        
                     reports.append(f"Shared Report: {agent.name} used {call.name}. Output: {str(res)[:150]}...")
 
-                agent.history.append(types.Content(role="tool", parts=tool_results))
+                # Use role="user" instead of "tool" to be fully compliant with Gemini APIs.
+                agent.history.append(types.Content(role="user", parts=tool_results))
+                
+                # Append extra user parts (such as FileData from upload_file) in a subsequent user turn.
+                if extra_parts:
+                    agent.history.append(types.Content(role="user", parts=extra_parts))
                 
                 if self.turn_passed_manually:
                     if not full_output_text.strip():

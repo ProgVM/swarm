@@ -21,7 +21,8 @@ def upload_file(args, agent, client):
 
     logger.info(f"Uploading asset: {path}")
     try:
-        file_obj = client.files.upload(path=path)
+        # Use file=path as required by the google-genai SDK
+        file_obj = client.files.upload(file=path)
         # Wait for Google server-side processing
         while file_obj.state.name == "PROCESSING":
             time.sleep(2)
@@ -30,13 +31,17 @@ def upload_file(args, agent, client):
         if file_obj.state.name == "FAILED":
             return ToolResult(success=False, error="Google API failed to process the file.")
             
-        # Inject FileData so the model can actually "see" the file content
-        agent.history.append(types.Content(
-            role="user", 
-            parts=[types.Part(file_data=types.FileData(file_uri=file_obj.uri, mime_type=file_obj.mime_type))]
-        ))
+        # Instead of appending directly to agent history (which breaks sequence),
+        # return the FileData part as extra_parts to be appended in a separate turn.
+        extra = [
+            types.Part(file_data=types.FileData(file_uri=file_obj.uri, mime_type=file_obj.mime_type))
+        ]
         
-        return ToolResult(success=True, data=f"System: File uploaded to {file_obj.uri}")
+        return ToolResult(
+            success=True, 
+            data=f"System: File uploaded to {file_obj.uri}",
+            extra_parts=extra
+        )
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         return ToolResult(success=False, error=str(e))

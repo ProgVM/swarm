@@ -9,7 +9,7 @@ from .utils import Colors, setup_logger, smart_sleep, Serializer, create_backup
 from .config import ConfigManager
 from .ui import handle_session_error
 from .core import SwarmSession
-from .exceptions import SwarmDataError
+from .exceptions import SwarmDataError, SwarmConfigError
 from .locking import SessionLockManager
 
 def parse_args():
@@ -34,20 +34,24 @@ def parse_args():
     return parser.parse_known_args()
 
 def run():
-    args, unknown = parse_args()
-    it = iter(unknown)
-    for item in it:
-        if item.startswith("--"):
-            key = item.lstrip("-")
-            try:
-                val = next(it)
-                try: val = json.loads(val)
-                except: pass
-                setattr(args, key, val)
-            except StopIteration:
-                setattr(args, key, True)
+    try:
+        args, unknown = parse_args()
+        it = iter(unknown)
+        for item in it:
+            if item.startswith("--"):
+                key = item.lstrip("-")
+                try:
+                    val = next(it)
+                    try: val = json.loads(val)
+                    except: pass
+                    setattr(args, key, val)
+                except StopIteration:
+                    setattr(args, key, True)
 
-    logger = setup_logger(args.log_level)
+        logger = setup_logger(args.log_level)
+    except Exception as e:
+        print(f"CRITICAL: Failed to parse arguments or initialize logger: {e}")
+        sys.exit(1)
     
     # Defaults layer
     defaults = {
@@ -70,28 +74,47 @@ def run():
         "load": None
     }
 
-    # Load file config if passed via --config
-    if args.config and os.path.exists(args.config):
-        with open(args.config, 'r', encoding='utf-8') as f:
-            conf_file = json.load(f)
+    try:
+        # Load file config if passed via --config
+        if args.config:
+            if not os.path.exists(args.config):
+                raise SwarmConfigError(f"Config file not found: {args.config}")
+            try:
+                with open(args.config, 'r', encoding='utf-8') as f:
+                    conf_file = json.load(f)
+            except json.JSONDecodeError as e:
+                raise SwarmConfigError(f"Config file is not valid JSON: {e}")
+            except Exception as e:
+                raise SwarmConfigError(f"Failed to read config file: {e}")
+                
             for k, v in conf_file.items():
                 if not hasattr(args, k): setattr(args, k, v)
 
-    # Load session configuration layer if restoring state
-    session_config = {}
-    if args.load and os.path.exists(args.load):
-        try:
-            with open(args.load, 'r', encoding='utf-8') as f:
-                state_data = json.load(f)
-                session_config = state_data.get("config", {})
-        except Exception:
-            pass
+        # Load session configuration layer if restoring state
+        session_config = {}
+        if args.load:
+            if not os.path.exists(args.load):
+                raise SwarmConfigError(f"Session load file not found: {args.load}")
+            try:
+                with open(args.load, 'r', encoding='utf-8') as f:
+                    state_data = json.load(f)
+                    session_config = state_data.get("config", {})
+            except json.JSONDecodeError as e:
+                raise SwarmConfigError(f"Session load file is not valid JSON: {e}")
+            except Exception as e:
+                raise SwarmConfigError(f"Failed to read session load file: {e}")
 
-    # Filter cli args to preserve layers hierarchy
-    cli_args = {k: v for k, v in vars(args).items() if v is not None}
+        # Filter cli args to preserve layers hierarchy
+        cli_args = {k: v for k, v in vars(args).items() if v is not None}
 
-    # Unified layered merge using ConfigManager (defaults <- session_config <- cli_args)
-    merged_config = ConfigManager.merge(defaults, session_config, cli_args)
+        # Unified layered merge using ConfigManager (defaults <- session_config <- cli_args)
+        merged_config = ConfigManager.merge(defaults, session_config, cli_args)
+
+        # Run validations on merged configuration
+        ConfigManager.validate(merged_config)
+    except SwarmConfigError as e:
+        print(f"{Colors.ERR}CONFIGURATION ERROR: {e}{Colors.RESET}")
+        sys.exit(1)
 
     class ConfigNamespace:
         def __init__(self, d):

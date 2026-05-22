@@ -1,3 +1,4 @@
+import os
 import collections.abc
 from swarm.schema import CONFIG_SCHEMA
 from swarm.exceptions import SwarmConfigError
@@ -48,3 +49,45 @@ class ConfigManager:
             config[k] = ConfigManager.cast_value(k, v)
             
         return config
+
+    @staticmethod
+    def validate(config):
+        """Validates configuration parameters, checking file path access and correctness of settings."""
+        # Validate that if save_file is provided, its directory exists and is writable
+        save_file = config.get("save_file")
+        if save_file:
+            try:
+                abs_path = os.path.abspath(save_file)
+                dir_name = os.path.dirname(abs_path)
+            except Exception as e:
+                raise SwarmConfigError(f"Invalid path format for save_file: {save_file}. Error: {e}")
+
+            if os.path.isdir(abs_path):
+                raise SwarmConfigError(f"save_file path is a directory, expected a file path: {save_file}")
+                
+            if not os.path.exists(dir_name):
+                raise SwarmConfigError(f"Directory for save_file does not exist: {dir_name}")
+                
+            if not os.access(dir_name, os.W_OK):
+                raise SwarmConfigError(f"Directory for save_file is not writable: {dir_name}")
+
+        # Validate positive numeric attributes
+        agents_count = config.get("agents_count")
+        if agents_count is not None:
+            try:
+                agents_count_val = int(agents_count)
+                if agents_count_val <= 0:
+                    raise SwarmConfigError(f"agents_count must be positive, got {agents_count_val}")
+            except (ValueError, TypeError):
+                raise SwarmConfigError(f"agents_count must be an integer, got '{agents_count}'")
+
+        max_history = config.get("max_history")
+        if max_history is not None:
+            try:
+                max_history_val = int(max_history)
+                if max_history_val <= 0:
+                    raise SwarmConfigError(f"max_history must be positive, got {max_history_val}")
+            except (ValueError, TypeError):
+                raise SwarmConfigError(f"max_history must be an integer, got '{max_history}'")
+
+        return True
