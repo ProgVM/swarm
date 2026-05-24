@@ -5,10 +5,10 @@ import logging
 import sys
 from google.genai import types
 
-from .utils import Colors, setup_logger, smart_sleep, Serializer, create_backup
+from .utils import Colors, setup_logger, smart_sleep, Serializer, create_backup, get_turn_role, get_turn_parts
 from .config import ConfigManager
 from .ui import handle_session_error
-from .core import SwarmSession
+from .core import SwarmSession, safe_append_to_history, clean_history
 from .exceptions import SwarmDataError, SwarmConfigError
 from .locking import SessionLockManager
 
@@ -31,6 +31,8 @@ def parse_args():
     parser.add_argument("--sys1", default="You are Agent 1.")
     parser.add_argument("--sys2", default="You are Agent 2.")
     parser.add_argument("--temp", type=float, default=0.7)
+    parser.add_argument("--inject_msg", help="Message to inject upon startup")
+    parser.add_argument("--inject_targets", help="Target agent(s) (Names or IDs, comma-separated) for injected message")
     return parser.parse_known_args()
 
 def run():
@@ -71,7 +73,9 @@ def run():
         "temp": 0.7,
         "keys": None,
         "config": None,
-        "load": None
+        "load": None,
+        "inject_msg": os.getenv("SWARM_INJECT_MSG"),
+        "inject_targets": os.getenv("SWARM_INJECT_TARGETS")
     }
 
     try:
@@ -145,6 +149,11 @@ def run():
 
     print(f"{Colors.SYS}{Colors.BOLD}>>> SWARM INITIALIZED.{Colors.RESET}")
 
+    if args.inject_msg:
+        print(f"{Colors.SYS}Executing startup message injection...{Colors.RESET}")
+        res_msg = session.inject_message(args.inject_msg, args.inject_targets)
+        print(f"{Colors.SYS}{res_msg}{Colors.RESET}")
+
     while True:
         try:
             agent = session.agents[session.current_agent_idx]
@@ -160,7 +169,8 @@ def run():
                 print(f"{Colors.REPORT}{rep}{Colors.RESET}")
                 for other in session.agents:
                     if other != agent:
-                        other.history.append(types.Content(role="user", parts=[types.Part(text=f"[SYSTEM REPORT] {rep}")]))
+                        safe_append_to_history(other.history, "user", [types.Part(text=f"[SYSTEM REPORT] {rep}")])
+                        other.history = clean_history(other.history)
 
             print(f"{color}{Colors.BOLD}{agent.name}:{Colors.RESET} {response}")
 
@@ -173,7 +183,8 @@ def run():
         except KeyboardInterrupt:
             try:
                 print(f"\n{Colors.MENU}{Colors.BOLD}=== COMMAND CENTER ==={Colors.RESET}")
-                print("1. Rotate Keys\n2. Toggle Pauses\n3. Save State\n4. Inject Message\n5. Log Level\n6. Shutdown")
+                print("1. Rotate Keys\n2. Toggle Pauses\n3. Save State\n4. Inject Message\n5. Log Level")
+                print("6. List Agents & Status\n7. Switch Current Agent\n8. View Agent History\n9. Shutdown")
                 choice = input(f"{Colors.MENU}Command: {Colors.RESET}").strip()
                 
                 if choice == '1': 
@@ -200,16 +211,68 @@ def run():
                         session_data.update(save_data)
                     print(f"State saved to {p}")
                 elif choice == '4':
+                    print(f"\n{Colors.SYS}--- Message Injection ---{Colors.RESET}")
+                    print("Current Agents:")
+                    for a in session.agents:
+                        last_role = get_turn_role(a.history[-1]) if a.history else "None"
+                        print(f"  [{a.id}] {a.name} (Last turn: {last_role})")
+                    
+                    targets = input("Target agent(s) (IDs or Names, comma-separated, or press Enter for ALL): ").strip()
                     msg = input("Enter message to inject: ").strip()
+                    
                     if msg:
-                        session.last_interaction = msg
-                        print(f"Injected message: {msg}")
+                        res_msg = session.inject_message(msg, targets if targets else None)
+                        print(f"{Colors.SYS}{res_msg}{Colors.RESET}")
                 elif choice == '5':
                     level = input("Enter log level (DEBUG, INFO, WARNING, ERROR): ").strip().upper()
                     if level in ["DEBUG", "INFO", "WARNING", "ERROR"]:
                         logging.getLogger().setLevel(getattr(logging, level))
                         print(f"Log level changed to {level}")
-                elif choice == '6': 
+                elif choice == '6':
+                    print(f"\n{Colors.SYS}=== AGENTS STATUS ==={Colors.RESET}")
+                    for i, a in enumerate(session.agents):
+                        is_current = " (ACTIVE)" if i == session.current_agent_idx else ""
+                        print(f"[{a.id}] {a.name}{is_current}:")
+                        print(f"  Model: {a.model}")
+                        print(f"  Description: {a.description}")
+                        print(f"  History turns: {len(a.history)}")
+                elif choice == '7':
+                    print("\nSelect agent to activate:")
+                    for i, a in enumerate(session.agents):
+                        print(f"  [{i}] {a.name}")
+                    idx_str = input("Enter index: ").strip()
+                    if idx_str.isdigit():
+                        idx = int(idx_str)
+                        if 0 <= idx < len(session.agents):
+                            session.current_agent_idx = idx
+                            print(f"Activated agent: {session.agents[idx].name}")
+                        else:
+                            print("Invalid index.")
+                elif choice == '8':
+                    print("\nSelect agent to view history:")
+                    for i, a in enumerate(session.agents):
+                        print(f"  [{i}] {a.name}")
+                    idx_str = input("Enter index: ").strip()
+                    if idx_str.isdigit():
+                        idx = int(idx_str)
+                        if 0 <= idx < len(session.agents):
+                            print(f"\n--- History of {session.agents[idx].name} ---")
+                            for j, turn in enumerate(session.agents[idx].history):
+                                role = get_turn_role(turn)
+                                parts = get_turn_parts(turn)
+                                print(f"Turn {j+1} [{role}]:")
+                                for p in parts:
+                                    if hasattr(p, "text") and p.text:
+                                        print(f"  {p.text[:200]}")
+                                    elif hasattr(p, "function_call") and p.function_call:
+                                        print(f"  Function Call: {p.function_call.name}")
+                                    elif hasattr(p, "function_response") and p.function_response:
+                                        print(f"  Function Response: {p.function_response.name}")
+                                    elif isinstance(p, dict):
+                                        print(f"  Dict Part: {str(p)[:200]}")
+                                    else:
+                                        print(f"  Other part: {type(p).__name__}")
+                elif choice == '9': 
                     sys.exit(0)
             except KeyboardInterrupt:
                 print(f"\n{Colors.SYS}Menu cancelled.{Colors.RESET}")

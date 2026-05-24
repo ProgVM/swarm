@@ -36,3 +36,17 @@ class Serializer:
     def deserialize_history(history_data):
         from google.genai import types
         return [types.Content(**h) for h in history_data]
+
+def get_turn_role(turn):
+    if hasattr(turn, "role"):
+        return turn.role
+    elif isinstance(turn, dict) and "role" in turn:
+        return turn["role"]
+    return None
+
+def get_turn_parts(turn):
+    if hasattr(turn, "parts"):
+        return list(turn.parts) if turn.parts else []
+    elif isinstance(turn, dict) and "parts" in turn:
+        return list(turn["parts"]) if turn["parts"] else []
+    return []

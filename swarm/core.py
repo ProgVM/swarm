@@ -4,7 +4,7 @@ import time
 from google import genai
 from google.genai import types
 
-from .utils import Colors, Serializer, create_backup
+from .utils import Colors, Serializer, create_backup, get_turn_role, get_turn_parts
 from .tools import ToolRegistry, ToolResult
 from .exceptions import SwarmDataError
 from .validator import SessionValidator
@@ -12,6 +12,71 @@ from .memory import MemoryManager
 from .logger import EventLogger
 
 logger = logging.getLogger("Swarm.Core")
+
+def clean_history(history):
+    """
+    Cleans up the history list to ensure it strictly conforms to Gemini's alternation rules.
+    Specifically:
+    1. Removes any empty content turns.
+    2. Merges consecutive turns of the same role (user-user or model-model) into a single turn
+       by extending the list of parts.
+    """
+    if not history:
+        return []
+        
+    cleaned = []
+    for turn in history:
+        role = get_turn_role(turn)
+        parts = get_turn_parts(turn)
+        
+        if not role:
+            continue
+            
+        if cleaned and get_turn_role(cleaned[-1]) == role:
+            # Merge parts
+            last_turn = cleaned[-1]
+            if hasattr(last_turn, "parts"):
+                if last_turn.parts is None:
+                    last_turn.parts = []
+                last_turn.parts.extend(parts)
+            elif isinstance(last_turn, dict):
+                if "parts" not in last_turn or last_turn["parts"] is None:
+                    last_turn["parts"] = []
+                last_turn["parts"].extend(parts)
+        else:
+            # Create a shallow copy to preserve types
+            if hasattr(turn, "role"):
+                cleaned.append(types.Content(role=role, parts=list(parts)))
+            else:
+                cleaned.append({"role": role, "parts": list(parts)})
+                
+    return cleaned
+
+def safe_append_to_history(history, role, parts):
+    """
+    Appends parts to the history list under the given role.
+    If the last turn in history already has the same role, it extends its parts.
+    Otherwise, it appends a new Content object.
+    """
+    p_list = []
+    for p in parts:
+        if isinstance(p, str):
+            p_list.append(types.Part(text=p))
+        else:
+            p_list.append(p)
+            
+    if history and get_turn_role(history[-1]) == role:
+        last_turn = history[-1]
+        if hasattr(last_turn, "parts"):
+            if last_turn.parts is None:
+                last_turn.parts = []
+            last_turn.parts.extend(p_list)
+        elif isinstance(last_turn, dict):
+            if "parts" not in last_turn or last_turn["parts"] is None:
+                last_turn["parts"] = []
+            last_turn["parts"].extend(p_list)
+    else:
+        history.append(types.Content(role=role, parts=p_list))
 
 class Agent:
     def __init__(self, agent_id, name, description, config):
@@ -97,7 +162,8 @@ class SwarmSession:
         full_output_text = ""
         
         agent.history, _ = self.memory.manage_history(agent.history)
-        agent.history.append(types.Content(role="user", parts=[types.Part(text=self.last_interaction)]))
+        safe_append_to_history(agent.history, "user", [types.Part(text=self.last_interaction)])
+        agent.history = clean_history(agent.history)
         
         session_file = getattr(self.args, 'save_file', 'swarm_session.json')
         
@@ -107,7 +173,7 @@ class SwarmSession:
                 active_tools = [{"function_declarations": decls}] if decls else None
                 
                 config = types.GenerateContentConfig(system_instruction=self._build_root_prompt(agent), tools=active_tools if active_tools else None)
-                resp = self.client.models.generate_content(model=agent.model, config=config, contents=agent.history)
+                resp = self.client.models.generate_content(model=agent.model, config=config, contents=clean_history(agent.history))
                 
                 candidate = resp.candidates[0]
                 current_chunk = "".join([p.text for p in candidate.content.parts if p.text])
@@ -120,11 +186,12 @@ class SwarmSession:
                 calls = [p.function_call for p in candidate.content.parts if p.function_call]
                 
                 if not calls:
-                    agent.history.append(candidate.content)
+                    safe_append_to_history(agent.history, "model", candidate.content.parts)
+                    agent.history = clean_history(agent.history)
                     self.last_interaction = full_output_text
                     return full_output_text.strip(), reports
 
-                agent.history.append(candidate.content)
+                safe_append_to_history(agent.history, "model", candidate.content.parts)
                 tool_results = []
                 extra_parts = []
                 
@@ -151,12 +218,9 @@ class SwarmSession:
                         
                     reports.append(f"Shared Report: {agent.name} used {call.name}. Output: {str(res)[:150]}...")
 
-                # Use role="user" instead of "tool" to be fully compliant with Gemini APIs.
-                agent.history.append(types.Content(role="user", parts=tool_results))
-                
-                # Append extra user parts (such as FileData from upload_file) in a subsequent user turn.
-                if extra_parts:
-                    agent.history.append(types.Content(role="user", parts=extra_parts))
+                # Append tool results and extra parts into a single user turn
+                safe_append_to_history(agent.history, "user", tool_results + extra_parts)
+                agent.history = clean_history(agent.history)
                 
                 if self.turn_passed_manually:
                     if not full_output_text.strip():
@@ -179,3 +243,43 @@ class SwarmSession:
                 
                 logger.error(f"Agent Cycle Error: {e}")
                 return f"Internal Framework Error: {e}", []
+
+    def inject_message(self, msg, targets=None):
+        """
+        Injects a message into the session.
+        If targets is None or empty, the message is injected globally (sets self.last_interaction,
+        and safely appends to the current agent's history).
+        If targets is specified (string of comma-separated Names/IDs), it parses and appends
+        the message directly to those agents' histories, and switches the current agent
+        to the first matched agent.
+        """
+        if not msg:
+            return "Error: Cannot inject empty message."
+            
+        if not targets:
+            self.last_interaction = msg
+            curr_agent = self.agents[self.current_agent_idx]
+            safe_append_to_history(curr_agent.history, "user", [types.Part(text=msg)])
+            curr_agent.history = clean_history(curr_agent.history)
+            return f"Message injected globally to current agent ({curr_agent.name})."
+            
+        target_list = [t.strip().lower() for t in targets.split(",") if t.strip()]
+        matched_agents = []
+        for t in target_list:
+            for i, a in enumerate(self.agents):
+                if str(a.id) == t or a.name.lower() == t:
+                    if (i, a) not in matched_agents:
+                        matched_agents.append((i, a))
+                        
+        if not matched_agents:
+            return f"No agents matched the targets: '{targets}'"
+            
+        for idx, agent in matched_agents:
+            safe_append_to_history(agent.history, "user", [types.Part(text=msg)])
+            agent.history = clean_history(agent.history)
+            
+        first_idx, first_agent = matched_agents[0]
+        self.current_agent_idx = first_idx
+        self.last_interaction = msg
+        names = ", ".join([a.name for _, a in matched_agents])
+        return f"Message injected to agent(s): {names}. Current agent switched to {first_agent.name}."

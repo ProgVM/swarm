@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub stars](https://img.shields.io/github/stars/ProgVM/swarm.svg)](https://github.com/ProgVM/swarm/stargazers)
 
-**Swarm** is a professional, production-ready, highly flexible multi-agent intelligence framework powered by Google's **Gemini** models. It allows an arbitrary number of autonomous agents to collaborate, use system tools, execute code, perform web searches, and index local data in a shared environmental context with robust transaction safety and memory management.
+**Swarm** is a professional, production-ready, highly flexible multi-agent intelligence framework powered by Google's **Gemini** models (including the latest **gemini-3.5-flash**). It allows an arbitrary number of autonomous agents to collaborate, use system tools, execute code, perform web searches, and index local data in a shared environmental context with robust transaction safety and memory management.
 
 ## 🚀 Key Features
 
@@ -16,7 +16,10 @@
 - **Files API Integration**: Agents can upload and analyze local files (PDFs, images, logs) on the fly.
 - **Smart Sandboxing**: Per-agent regex blacklists for terminal commands and file system paths.
 - **Persistent & Secure Sessions**: Save and load complete Swarm states. Protected against race conditions and file corruption via `SessionLockManager` (thread-safe RLock and atomic temp-file swaps).
-- **Advanced Memory Hierarchy**: Integrated `MemoryManager` with sliding window history truncation to prevent context window overflow while preserving key interaction states.
+- **Advanced Memory Hierarchy & Robustness**:
+  - Integrated `MemoryManager` with sliding window history truncation to prevent context window overflow while preserving key interaction states.
+  - **Self-Healing Alternation Filter**: An automated history cleaning and merging pipeline that prevents consecutive same-role turns (`user-user` or `model-model`), ensuring 100% compliance with Gemini's strict conversational API constraints.
+- **Flexible Message Injection**: Manually inject messages globally (to the current active agent) or directly to specific targeted agent(s) by ID or Name. Highly configurable through CLI parameters, environment variables, or the interactive Command Center.
 - **Built-in RAG (Retrieval-Augmented Generation)**: Dynamic indexing and querying of local documents via `LocalFileRetriever` and `RAGTool` with token-aware truncation.
 - **Network Resilience**: 
   - **429 (Too Many Requests)**: Automatic API key rotation.
@@ -48,7 +51,7 @@ swarm --keys YOUR_API_KEY \
 
 Swarm uses a dynamic argument system. You can prefix any standard parameter with `aiN_` to target a specific agent:
 
-- `--ai1_model "gemini-1.5-pro"` (Use a heavier model for the lead agent)
+- `--ai1_model "gemini-3.5-flash"` (Use the latest Gemini model for the lead agent)
 - `--ai2_temp 0.1` (Make the auditor more deterministic)
 - `--ai3_name "Researcher"` (Set a custom name for the 3rd agent)
 - `--cmd_blacklist "rm" "sudo"` (Global security policy)
@@ -58,16 +61,25 @@ Swarm uses a dynamic argument system. You can prefix any standard parameter with
 - `--log_level`: DEBUG, INFO, or WARNING.
 - `--no_pause`: Disable "Press Enter" delays for fully autonomous runs.
 - `--config`: Path to a JSON file containing all these parameters.
+- `--inject_msg`: A message to inject into the session upon startup.
+- `--inject_targets`: Targeted agent(s) (Names or IDs, comma-separated) to receive the injected message.
+
+### Environment Variables:
+- `SWARM_INJECT_MSG`: Default startup message to inject if CLI parameter is not set.
+- `SWARM_INJECT_TARGETS`: Target agent(s) (Names or IDs, comma-separated) for the environment-injected message.
 
 ## ⌨️ Command Center (Ctrl+C)
 
 Press `Ctrl+C` during execution to pause the Swarm and access the interactive menu:
-1. **Change Keys**: Rotate or update API keys on the fly.
+1. **Rotate Keys**: Rotate or update API keys on the fly.
 2. **Toggle Pauses**: Switch between manual and autonomous modes.
 3. **Save State**: Export the entire session to a JSON file (including the active config layer!).
-4. **Inject Directive**: Manually "whisper" a command to one or all agents.
+4. **Inject Message**: Direct a message globally or target specific agent(s) (by ID or Name), instantly switching focus.
 5. **Log Level**: Adjust verbosity without restarting.
-6. **Shutdown**: Gracefully exit the session.
+6. **List Agents & Status**: Show details of all agents, active models, descriptions, and history turn lengths.
+7. **Switch Current Agent**: Manually change the active agent.
+8. **View Agent History**: Browse the full dialogue and turn history of any agent.
+9. **Shutdown**: Gracefully exit the session.
 
 ## 📄 Tool Documentation
 
